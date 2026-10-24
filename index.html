@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rego Scan</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#16181d; --muted:#667085; --accent:#0b5cff; --border:#d9dde5; --warn:#b54708; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1116; --card:#181c23; --text:#eceff4; --muted:#98a2b3; --accent:#5b8cff; --border:#2b313b; --warn:#f79009; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, sans-serif; }
+  main { max-width:480px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.4rem; margin:8px 0 16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; }
+  button, .btn { display:block; width:100%; padding:14px; border:0; border-radius:10px; background:var(--accent); color:#fff;
+    font:inherit; font-weight:600; text-align:center; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--border); }
+  button:disabled { opacity:.5; cursor:default; }
+  input[type=file] { display:none; }
+  img#preview { width:100%; border-radius:8px; margin-top:12px; display:none; }
+  .plate { width:100%; padding:12px; margin:8px 0 12px; border:2px solid var(--text); border-radius:8px; background:#fff; color:#000;
+    font:700 2rem/1 ui-monospace, monospace; text-align:center; text-transform:uppercase; letter-spacing:.12em; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .chip { width:auto; padding:6px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border); font-weight:500; }
+  .muted { color:var(--muted); font-size:.875rem; }
+  .warn { color:var(--warn); }
+  .stack > * + * { margin-top:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Rego Scan</h1>
+
+  <div class="card stack">
+    <label class="btn" for="photo">📷 Take photo of number plate</label>
+    <input id="photo" type="file" accept="image/*" capture="environment">
+    <img id="preview" alt="Number plate photo">
+    <div id="status" class="muted" role="status"></div>
+  </div>
+
+  <div class="card">
+    <label for="plate" class="muted">Plate (check it matches the photo)</label>
+    <input id="plate" class="plate" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123">
+    <div id="chips" class="chips"></div>
+    <button id="check" disabled>Check registration</button>
+    <p class="muted">Copies the plate and opens the official Service Victoria registration check (VicRoads data). Paste the plate there.</p>
+  </div>
+
+  <p class="muted">Registration status, expiry date and vehicle details come from the official check only. OCR runs on your device; photos are never uploaded.</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
+<script>
+const CHECK_URL = 'https://service.vic.gov.au/checkrego';
+
+const $ = id => document.getElementById(id);
+const photo = $('photo'), preview = $('preview'), statusEl = $('status');
+const plateEl = $('plate'), chipsEl = $('chips'), checkBtn = $('check');
+
+// Victorian plates are 1-7 alphanumeric characters (standard, personalised, custom).
+// Pull plausible candidates out of noisy OCR output, best guesses first.
+function extractCandidates(text) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of text.toUpperCase().split(/[^A-Z0-9]+/)) {
+    if (raw.length < 3 || raw.length > 7 || seen.has(raw)) continue;
+    seen.add(raw);
+    // Mixed letters+digits is the strongest signal for a standard plate.
+    const score = (/[A-Z]/.test(raw) && /[0-9]/.test(raw) ? 10 : 0) + (raw.length >= 5 && raw.length <= 6 ? 5 : 0) + raw.length;
+    out.push({ raw, score });
+  }
+  return out.sort((a, b) => b.score - a.score).map(c => c.raw);
+}
+
+// Downscale + greyscale + contrast stretch; plates photographed at angle/in glare OCR much better.
+async function prepare(file) {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  const ctx = c.getContext('2d');
+  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+  const img = ctx.getImageData(0, 0, c.width, c.height), d = img.data;
+  let lo = 255, hi = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114;
+    d[i] = g; if (g < lo) lo = g; if (g > hi) hi = g;
+  }
+  const range = Math.max(1, hi - lo);
+  for (let i = 0; i < d.length; i += 4) {
+    const v = (d[i] - lo) * 255 / range;
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+function setPlate(p) {
+  plateEl.value = p;
+  checkBtn.disabled = p.length < 1;
+}
+
+photo.addEventListener('change', async () => {
+  const file = photo.files[0];
+  if (!file) return;
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  chipsEl.innerHTML = '';
+  setPlate('');
+  statusEl.textContent = 'Reading plate…';
+  try {
+    if (!window.Tesseract) throw new Error('OCR library failed to load (offline?)');
+    const canvas = await prepare(file);
+    const { data } = await Tesseract.recognize(canvas, 'eng', {
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+      tessedit_pageseg_mode: '11', // sparse text: finds the plate among background clutter
+    });
+    const cands = extractCandidates(data.text);
+    if (!cands.length) { statusEl.innerHTML = '<span class="warn">Couldn\'t read a plate. Retake closer, or type it in.</span>'; return; }
+    setPlate(cands[0]);
+    cands.slice(1, 6).forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'chip secondary'; b.textContent = c;
+      b.onclick = () => setPlate(c);
+      chipsEl.appendChild(b);
+    });
+    statusEl.textContent = 'Read: ' + cands[0] + '. Fix it below if wrong (O/0, I/1, S/5 are common mix-ups).';
+  } catch (e) {
+    statusEl.innerHTML = '<span class="warn">' + e.message + '. Type the plate in manually.</span>';
+  }
+});
+
+plateEl.addEventListener('input', () => setPlate(plateEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '')));
+
+checkBtn.addEventListener('click', async () => {
+  const plate = plateEl.value;
+  try { await navigator.clipboard.writeText(plate); statusEl.textContent = plate + ' copied. Paste it into the registration check.'; } catch {}
+  window.open(CHECK_URL, '_blank', 'noopener');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crewboard</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#1b1f24;--muted:#5d6670;--line:#e2e5ea;--accent:#2f6fdf;--accent-ink:#fff;--ok:#1e8a4c;--warn:#b7791f;--bad:#c0392b;--chip:#eef1f5}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111418;--panel:#191d22;--ink:#e7eaee;--muted:#9aa3ad;--line:#2a3038;--accent:#5b8ff0;--chip:#232a32}}
+:root[data-theme="dark"]{--bg:#111418;--panel:#191d22;--ink:#e7eaee;--muted:#9aa3ad;--line:#2a3038;--accent:#5b8ff0;--chip:#232a32}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0}
+header .sub{color:var(--muted);font-size:12px}
+nav{display:flex;gap:4px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+nav button{border:0;background:none;color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;font:inherit}
+nav button.on{background:var(--chip);color:var(--ink);font-weight:600}
+main{padding:16px;max-width:1200px;margin:0 auto}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:6px;cursor:pointer;font:inherit}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.sm{padding:3px 8px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h3{margin:0 0 8px;font-size:14px}
+.stat{font-size:26px;font-weight:700}
+.muted{color:var(--muted)}
+.chip{display:inline-block;background:var(--chip);border-radius:999px;padding:1px 8px;font-size:11px;color:var(--muted)}
+.chip.ok{color:var(--ok)}.chip.warn{color:var(--warn)}.chip.bad{color:var(--bad)}
+.board{display:grid;grid-template-columns:repeat(6,minmax(200px,1fr));gap:10px;overflow-x:auto;padding-bottom:8px}
+.col{background:var(--chip);border-radius:10px;padding:8px;min-height:120px}
+.col h4{margin:2px 4px 8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.task{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;cursor:pointer}
+.task:hover{border-color:var(--accent)}
+.task .t{font-weight:600;margin-bottom:4px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.tree{list-style:none;padding-left:18px;margin:0;border-left:1px dashed var(--line)}
+.tree.root{padding-left:0;border:0}
+.tree li{margin:8px 0}
+.agent{display:inline-flex;flex-direction:column;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:240px}
+.bar{height:6px;background:var(--chip);border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--ok)}
+.bar.warn>i{background:var(--warn)}.bar.bad>i{background:var(--bad)}
+label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+textarea{min-height:80px;resize:vertical}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);width:min(760px,calc(100vw - 32px));max-height:88vh;padding:0}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog .body{padding:16px;overflow:auto;max-height:calc(88vh - 60px)}
+dialog .foot{padding:10px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.comment{border-left:3px solid var(--line);padding:6px 10px;margin:8px 0;white-space:pre-wrap;word-wrap:break-word}
+.comment.agent{border-color:var(--accent)}
+.log{font-size:12px;max-height:320px;overflow:auto}
+.log div{padding:3px 0;border-bottom:1px solid var(--line)}
+.banner{background:var(--chip);border-radius:8px;padding:10px 12px;margin-bottom:12px}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px;border-bottom:1px solid var(--line);vertical-align:top}
+@media (max-width:640px){header,nav,main{padding-left:16px;padding-right:16px}.board{grid-template-columns:repeat(6,80vw)}.agent{min-width:0;width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1 id="coName">Crewboard</h1><div class="sub" id="coMission"></div></div>
+  <div class="row"><span class="chip" id="hbStatus">Heartbeat idle</span><button class="btn pri" data-act="heartbeat">Run heartbeat</button></div>
+</header>
+<nav id="nav"></nav>
+<main id="view"></main>
+<dialog id="dlg"><div class="body" id="dlgBody"></div><div class="foot" id="dlgFoot"></div></dialog>
+
+<script>
+"use strict";
+const KEY = "crewboard.v1";
+const PRICES = { "claude-opus-5-5":[4,20], "claude-sonnet-5-5":[2,10], "claude-haiku-5-5":[0.1,0.5] }; // USD per 1M tokens (in, out)
+const MODELS = Object.keys(PRICES);
+const COLS = [["backlog","Backlog"],["todo","To do"],["in_progress","In progress"],["review","Review"],["blocked","Blocked"],["done","Done"]];
+const HUMAN = "human";
+const uid = () => Math.random().toString(36).slice(2,9);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = s => document.querySelector(s);
+const money = n => "$" + (n||0).toFixed(n < 1 ? 3 : 2);
+const ago = ts => { const m = Math.round((Date.now()-ts)/60000); return m<1?"just now":m<60?m+"m ago":m<1440?Math.round(m/60)+"h ago":Math.round(m/1440)+"d ago"; };
+
+function seed(){
+  const g = (id,title,parentId,desc="") => ({id,title,parentId,desc});
+  const a = (id,name,title,reportsTo,instructions,model="claude-opus-5-5",budgetUsd=3) => ({id,name,title,reportsTo,instructions,model,budgetUsd,spentUsd:0,status:"active",lastRun:null});
+  const t = (title,desc,goalId,assigneeId,status="todo",priority=2) => ({id:uid(),title,desc,goalId,assigneeId,status,priority,comments:[],createdBy:HUMAN,costUsd:0,updated:Date.now()});
+  return {
+    company:{name:"Career & Ventures HQ", mission:"Civil engineering job in Melbourne → PR before 9 Jan 2028 → media business → GP clinic."},
+    goals:[
+      g("g1","Full-time civil/construction role in Melbourne SE by Mar 2027",null,"Site, project, graduate, design engineer or drafter/CAD roles. Tier 2–3 firms, councils, recruiters."),
+      g("g1a","Recruiter and employer pipeline","g1"),
+      g("g1b","Weekly floor: 5 outreach messages, 3 tailored applications, 1 follow-up","g1"),
+      g("g2","Lodge strongest PR pathway by mid-2027","", "Route A: own job/sponsorship (482/186) or 190/491. Route B: wife as primary applicant. Visa expires 9 Jan 2028."),
+      g("g2a","English retest Jan–Feb 2027 (current result lapses ~22 Mar 2027)","g2"),
+      g("g3","Launch YouTube channel (AI, engineering, photography, travel)",null),
+    ].map(x=>({...x,parentId:x.parentId||null})),
+    agents:[
+      a("cos","Atlas","Chief of Staff",null,"Turn goals into weekly plans that fit around fuel-station shifts and the Dec 2026 move. Break big work into tasks for the team. Hold the owner accountable and call out procrastination."),
+      a("career","Brick","Career Lead","cos","Own the Melbourne job search: target employers in the south-east, recruiters, role variants (site/project/graduate/design engineer, drafter/CAD), resume and cover-letter strategy with a clear work-rights line and project-outcome bullets."),
+      a("writer","Quill","Outreach Writer","career","Write short, specific LinkedIn and email outreach to hiring managers and recruiters. Personalise with a hook, one proof point, a work-rights line and a clear ask.","claude-sonnet-5-5",2),
+      a("pr","Ledger","PR Pathway Researcher","cos","Compare PR routes (190/491 nomination, 482/186 sponsorship, partner points, wife-as-primary). Track the English-test deadline. Rules change often: label anything from memory as 'verify with a registered migration agent'.","claude-opus-5-5",3),
+      a("content","Reel","Content Producer","cos","Plan a YouTube channel at the intersection of AI, civil engineering, photography and travel. Produce video ideas, titles, outlines and a posting cadence a busy shift worker can sustain.","claude-sonnet-5-5",2),
+    ],
+    tasks:[
+      t("Shortlist 25 Tier 2–3 civil firms + 10 recruiters in Melbourne SE","Near Clayton / Monash. For each: why it fits, likely role type, who to contact (job title).","g1a","career"),
+      t("Draft 5 LinkedIn outreach messages","For site/project engineer hiring managers. Under 120 words each. Include work-rights line (485 to Jan 2028).","g1b","writer"),
+      t("Route A vs Route B: question list for the migration agent","Compare my own nomination/sponsorship vs wife as primary applicant. Output: decision table + 15 questions for a joint meeting in Jan 2027.","g2","pr"),
+      t("Weekly plan around shift work","Time-block a week: job hunt, outreach floor, English prep, one content hour. Assume 4 shifts/week.","g1b","cos"),
+      t("10 video ideas for a first YouTube season","AI + civil engineering + moving to Melbourne. Titles, hooks, and what I can film with my camera.","g3","content"),
+      t("Book English retest for Jan–Feb 2027","Owner task. Do it this week.","g2a",HUMAN,"todo",1),
+    ],
+    approvals:[], activity:[{ts:Date.now(),text:"Company created with 5 agents and 6 tasks."}],
+    settings:{apiKey:"", requireApproval:true, autoMin:0, effort:"medium"},
+    ui:{tab:"dashboard"}
+  };
+}
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)) || seed(); } catch { S = seed(); }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+const log = text => { S.activity.unshift({ts:Date.now(),text}); S.activity = S.activity.slice(0,300); };
+const agentById = id => S.agents.find(a=>a.id===id);
+const who = id => id===HUMAN ? "You" : (agentById(id)?.name || "Unassigned");
+const goalChain = id => { const out=[]; let g=S.goals.find(x=>x.id===id); while(g){out.unshift(g); g=S.goals.find(x=>x.id===g.parentId);} return out; };
+
+/* ---------- views ---------- */
+const TABS = [["dashboard","Dashboard"],["board","Board"],["org","Org chart"],["goals","Goals"],["approvals","Approvals"],["activity","Activity"],["settings","Settings"]];
+function render(){
+  $("#coName").textContent = S.company.name;
+  $("#coMission").textContent = S.company.mission;
+  const pend = S.approvals.filter(x=>x.status==="pending").length;
+  $("#nav").innerHTML = TABS.map(([k,l])=>`<button data-act="tab" data-id="${k}" class="${S.ui.tab===k?"on":""}">${l}${k==="approvals"&&pend?` (${pend})`:""}</button>`).join("");
+  $("#view").innerHTML = ({dashboard,board,org,goals,approvals,activity,settings})[S.ui.tab]();
+  save();
+}
+function budgetBar(a){ const p = a.budgetUsd ? Math.min(100, a.spentUsd/a.budgetUsd*100) : 0; return `<div class="bar ${p>=100?"bad":p>=80?"warn":""}"><i style="width:${p}%"></i></div>`; }
+function dashboard(){
+  const by = s => S.tasks.filter(t=>t.status===s).length;
+  const spent = S.agents.reduce((n,a)=>n+a.spentUsd,0), budget = S.agents.reduce((n,a)=>n+a.budgetUsd,0);
+  const mine = S.tasks.filter(t=>t.assigneeId===HUMAN && t.status!=="done");
+  const review = S.tasks.filter(t=>t.status==="review");
+  return `${!S.settings.apiKey?`<div class="banner">Add an Anthropic API key in <b>Settings</b> so agents can work. Without one, you can still plan goals and tasks.</div>`:""}
+  <div class="grid">
+    <div class="card"><h3>Open tasks</h3><div class="stat">${S.tasks.length-by("done")}</div><div class="muted">${by("in_progress")} in progress · ${by("blocked")} blocked</div></div>
+    <div class="card"><h3>Waiting for your review</h3><div class="stat">${review.length}</div><div class="muted">${S.approvals.filter(x=>x.status==="pending").length} approvals pending</div></div>
+    <div class="card"><h3>Spend this period</h3><div class="stat">${money(spent)}</div><div class="muted">of ${money(budget)} total agent budget</div></div>
+    <div class="card"><h3>Done</h3><div class="stat">${by("done")}</div><div class="muted">across ${S.goals.length} goals</div></div>
+  </div>
+  <div class="grid" style="margin-top:12px">
+    <div class="card"><h3>Your tasks</h3>${mine.length?mine.map(taskLine).join(""):`<div class="muted">Nothing assigned to you.</div>`}</div>
+    <div class="card"><h3>Review queue</h3>${review.length?review.map(taskLine).join(""):`<div class="muted">No agent work waiting.</div>`}</div>
+    <div class="card"><h3>Recent activity</h3><div class="log">${S.activity.slice(0,8).map(x=>`<div><span class="muted">${ago(x.ts)}</span> ${esc(x.text)}</div>`).join("")}</div></div>
+  </div>`;
+}
+const taskLine = t => `<div class="row spread" style="padding:4px 0"><a href="#" data-act="open" data-id="${t.id}">${esc(t.title)}</a><span class="chip">${esc(who(t.assigneeId))}</span></div>`;
+function board(){
+  return `<div class="row spread" style="margin-bottom:10px"><span class="muted">Agents pick up “To do” tasks on each heartbeat. Finished work lands in Review for you.</span><button class="btn pri" data-act="newTask">New task</button></div>
+  <div class="board">${COLS.map(([k,l])=>{ const ts=S.tasks.filter(t=>t.status===k).sort((a,b)=>a.priority-b.priority||b.updated-a.updated);
+    return `<div class="col"><h4>${l} · ${ts.length}</h4>${ts.map(t=>`<div class="task" data-act="open" data-id="${t.id}"><div class="t">${esc(t.title)}</div><div class="row"><span class="chip">${esc(who(t.assigneeId))}</span><span class="chip">P${t.priority}</span>${t.costUsd?`<span class="chip">${money(t.costUsd)}</span>`:""}</div></div>`).join("")}</div>`;}).join("")}</div>`;
+}
+function org(){
+  const node = a => `<li><div class="agent"><div class="row spread"><b>${esc(a.name)}</b><span class="chip ${a.status==="active"?"ok":"bad"}">${a.status}</span></div><div class="muted">${esc(a.title)} · ${esc(a.model.replace("claude-",""))}</div>${budgetBar(a)}<div class="row spread muted" style="font-size:12px"><span>${money(a.spentUsd)} / ${money(a.budgetUsd)}</span><span>${a.lastRun?"ran "+ago(a.lastRun):"never run"}</span></div><div class="row"><button class="btn sm" data-act="editAgent" data-id="${a.id}">Edit</button><button class="btn sm" data-act="toggleAgent" data-id="${a.id}">${a.status==="active"?"Pause":"Resume"}</button></div></div>${kids(a.id)}</li>`;
+  const kids = id => { const k = S.agents.filter(a=>a.reportsTo===id); return k.length?`<ul class="tree">${k.map(node).join("")}</ul>`:""; };
+  const roots = S.agents.filter(a=>!a.reportsTo || !agentById(a.reportsTo));
+  return `<div class="row spread" style="margin-bottom:10px"><span class="muted">You sit above the whole chart. Agents report up; budgets stop them hard at 100%.</span><button class="btn pri" data-act="editAgent">Hire agent</button></div><ul class="tree root">${roots.map(node).join("")}</ul>`;
+}
+function goals(){
+  const prog = id => { const ids = new Set([id]); let grew=true; while(grew){grew=false; S.goals.forEach(g=>{if(g.parentId&&ids.has(g.parentId)&&!ids.has(g.id)){ids.add(g.id);grew=true;}});} const ts=S.tasks.filter(t=>ids.has(t.goalId)); return [ts.filter(t=>t.status==="done").length, ts.length]; };
+  const node = g => { const [d,n]=prog(g.id); const k=S.goals.filter(x=>x.parentId===g.id); return `<li><div class="card"><div class="row spread"><b>${esc(g.title)}</b><span class="chip">${d}/${n} tasks done</span></div>${g.desc?`<div class="muted">${esc(g.desc)}</div>`:""}<div class="bar" style="margin-top:6px"><i style="width:${n?d/n*100:0}%"></i></div><div class="row" style="margin-top:6px"><button class="btn sm" data-act="editGoal" data-id="${g.id}">Edit</button><button class="btn sm" data-act="editGoal" data-parent="${g.id}">Add sub-goal</button><button class="btn sm" data-act="newTask" data-goal="${g.id}">Add task</button></div></div>${k.length?`<ul class="tree">${k.map(node).join("")}</ul>`:""}</li>`; };
+  return `<div class="row spread" style="margin-bottom:10px"><span class="muted">Every task carries its goal chain, so agents see the “why”.</span><button class="btn pri" data-act="editGoal">New goal</button></div><ul class="tree root">${S.goals.filter(g=>!g.parentId).map(node).join("")}</ul>`;
+}
+function approvals(){
+  const rows = S.approvals.slice().reverse();
+  return `<div class="card"><h3>Approvals</h3><p class="muted">When “require approval” is on, tasks that agents propose wait here before they enter the board.</p>${rows.length?`<table><tr><th>Request</th><th>From</th><th>Status</th><th></th></tr>${rows.map(r=>`<tr><td><b>${esc(r.payload.title)}</b><div class="muted">${esc(r.payload.description)}</div><div class="muted">→ ${esc(who(r.payload.assigneeId))}</div></td><td>${esc(who(r.requestedBy))}</td><td><span class="chip">${r.status}</span></td><td>${r.status==="pending"?`<div class="row"><button class="btn sm pri" data-act="approve" data-id="${r.id}">Approve</button><button class="btn sm" data-act="reject" data-id="${r.id}">Reject</button></div>`:""}</td></tr>`).join("")}</table>`:`<div class="muted">No requests yet.</div>`}</div>`;
+}
+function activity(){ return `<div class="card"><h3>Activity log</h3><div class="log" style="max-height:none">${S.activity.map(x=>`<div><span class="muted">${new Date(x.ts).toLocaleString()}</span> ${esc(x.text)}</div>`).join("")}</div></div>`; }
+function settings(){
+  const st=S.settings;
+  return `<div class="grid"><div class="card"><h3>Company</h3><label>Name</label><input id="sName" value="${esc(S.company.name)}"><label>Mission</label><textarea id="sMission">${esc(S.company.mission)}</textarea></div>
+  <div class="card"><h3>Agents runtime</h3><label>Anthropic API key</label><input id="sKey" type="password" value="${esc(st.apiKey)}" placeholder="sk-ant-...">
+  <div class="muted" style="font-size:12px;margin-top:4px">Stored only in this browser (localStorage) and sent only to api.anthropic.com. Use a key with a low spend limit.</div>
+  <label>Effort</label><select id="sEffort">${["low","medium","high"].map(e=>`<option ${st.effort===e?"selected":""}>${e}</option>`).join("")}</select>
+  <label>Auto-heartbeat every N minutes while this tab is open (0 = off)</label><input id="sAuto" type="number" min="0" value="${st.autoMin}">
+  <label><input id="sAppr" type="checkbox" style="width:auto" ${st.requireApproval?"checked":""}> Require my approval for tasks agents create</label></div>
+  <div class="card"><h3>Data</h3><div class="row"><button class="btn" data-act="export">Export JSON</button><button class="btn" data-act="import">Import JSON</button><button class="btn" data-act="resetSpend">Reset spend (new month)</button><button class="btn" data-act="reset">Reset everything</button></div><input id="importFile" type="file" accept="application/json" style="display:none"></div></div>
+  <div style="margin-top:12px"><button class="btn pri" data-act="saveSettings">Save settings</button></div>`;
+}
+
+/* ---------- dialogs ---------- */
+function openDlg(body, foot){ $("#dlgBody").innerHTML=body; $("#dlgFoot").innerHTML=foot+`<button class="btn" data-act="close">Close</button>`; if(!$("#dlg").open) $("#dlg").showModal(); }
+const closeDlg = () => $("#dlg").close();
+const assigneeOpts = sel => `<option value="${HUMAN}" ${sel===HUMAN?"selected":""}>You</option>`+S.agents.map(a=>`<option value="${a.id}" ${sel===a.id?"selected":""}>${esc(a.name)} — ${esc(a.title)}</option>`).join("");
+const goalOpts = sel => `<option value="">(none)</option>`+S.goals.map(g=>`<option value="${g.id}" ${sel===g.id?"selected":""}>${esc(g.title)}</option>`).join("");
+
+function openTask(id){
+  const t=S.tasks.find(x=>x.id===id); if(!t) return;
+  const chain=goalChain(t.goalId).map(g=>esc(g.title)).join(" → ");
+  openDlg(`<label>Title</label><input id="tTitle" value="${esc(t.title)}"><label>Description</label><textarea id="tDesc">${esc(t.desc)}</textarea>
+   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"><div><label>Assignee</label><select id="tWho">${assigneeOpts(t.assigneeId)}</select></div><div><label>Status</label><select id="tStatus">${COLS.map(([k,l])=>`<option value="${k}" ${t.status===k?"selected":""}>${l}</option>`).join("")}</select></div><div><label>Priority</label><select id="tPri">${[1,2,3].map(p=>`<option ${t.priority===p?"selected":""}>${p}</option>`).join("")}</select></div><div><label>Goal</label><select id="tGoal">${goalOpts(t.goalId)}</select></div></div>
+   ${chain?`<div class="muted" style="margin-top:6px">Goal chain: ${chain}</div>`:""}<div class="muted">Cost so far: ${money(t.costUsd)}</div>
+   <h3 style="margin-top:14px">Thread</h3>${t.comments.map(c=>`<div class="comment ${c.author!==HUMAN?"agent":""}"><div class="muted" style="font-size:12px">${esc(who(c.author))} · ${ago(c.ts)}</div>${esc(c.text)}</div>`).join("")||`<div class="muted">No comments yet.</div>`}
+   <label>Add a comment (agents read the whole thread next time)</label><textarea id="tComment"></textarea>`,
+   `${t.status==="review"?`<button class="btn pri" data-act="accept" data-id="${t.id}">Approve → Done</button><button class="btn" data-act="changes" data-id="${t.id}">Request changes</button>`:""}
+    ${t.assigneeId!==HUMAN&&agentById(t.assigneeId)?`<button class="btn" data-act="runOne" data-id="${t.id}">Run agent on this now</button>`:""}
+    <button class="btn" data-act="delTask" data-id="${t.id}">Delete</button><button class="btn pri" data-act="saveTask" data-id="${t.id}">Save</button>`);
+}
+function newTask(goalId){
+  openDlg(`<h3>New task</h3><label>Title</label><input id="tTitle"><label>Description</label><textarea id="tDesc"></textarea><label>Assignee</label><select id="tWho">${assigneeOpts(S.agents[0]?.id)}</select><label>Goal</label><select id="tGoal">${goalOpts(goalId)}</select><label>Priority</label><select id="tPri"><option>1</option><option selected>2</option><option>3</option></select>`,
+   `<button class="btn pri" data-act="createTask">Create</button>`);
+}
+function editAgent(id){
+  const a = agentById(id) || {name:"",title:"",reportsTo:"cos",instructions:"",model:"claude-opus-5-5",budgetUsd:2};
+  openDlg(`<h3>${id?"Edit agent":"Hire agent"}</h3><label>Name</label><input id="aName" value="${esc(a.name)}"><label>Title / role</label><input id="aTitle" value="${esc(a.title)}">
+   <label>Reports to</label><select id="aBoss"><option value="">(you, directly)</option>${S.agents.filter(x=>x.id!==id).map(x=>`<option value="${x.id}" ${a.reportsTo===x.id?"selected":""}>${esc(x.name)}</option>`).join("")}</select>
+   <label>Instructions</label><textarea id="aIns">${esc(a.instructions)}</textarea>
+   <label>Model</label><select id="aModel">${MODELS.map(m=>`<option ${a.model===m?"selected":""}>${m}</option>`).join("")}</select>
+   <label>Budget per period (USD, hard stop)</label><input id="aBudget" type="number" min="0" step="0.5" value="${a.budgetUsd}">`,
+   `${id?`<button class="btn" data-act="fireAgent" data-id="${id}">Remove</button>`:""}<button class="btn pri" data-act="saveAgent" data-id="${id||""}">Save</button>`);
+}
+function editGoal(id,parentId){
+  const g = S.goals.find(x=>x.id===id) || {title:"",desc:"",parentId:parentId||null};
+  openDlg(`<h3>${id?"Edit goal":"New goal"}</h3><label>Title</label><input id="gTitle" value="${esc(g.title)}"><label>Why / detail</label><textarea id="gDesc">${esc(g.desc)}</textarea><label>Parent goal</label><select id="gParent">${goalOpts(g.parentId)}</select>`,
+   `${id?`<button class="btn" data-act="delGoal" data-id="${id}">Delete</button>`:""}<button class="btn pri" data-act="saveGoal" data-id="${id||""}">Save</button>`);
+}
+
+/* ---------- agent runtime ---------- */
+const SCHEMA = {type:"object",additionalProperties:false,required:["summary","deliverable","outcome","question_for_owner","subtasks"],properties:{
+  summary:{type:"string",description:"One or two sentences on what you did."},
+  deliverable:{type:"string",description:"The actual work product: list, draft, plan, table (plain text or markdown)."},
+  outcome:{type:"string",enum:["review","blocked"],description:"review = ready for the owner; blocked = you need an answer first."},
+  question_for_owner:{type:"string",description:"If blocked, the one question you need answered. Otherwise empty."},
+  subtasks:{type:"array",description:"Follow-up tasks (max 3). Empty if none.",items:{type:"object",additionalProperties:false,required:["title","description","assignee"],properties:{title:{type:"string"},description:{type:"string"},assignee:{type:"string",description:"An agent name from the team list, or 'owner'."}}}}
+}};
+function buildPrompt(a,t){
+  const boss = a.reportsTo ? agentById(a.reportsTo) : null;
+  const team = S.agents.map(x=>`- ${x.name}: ${x.title}`).join("\n");
+  const system = `You are ${a.name}, ${a.title} at "${S.company.name}".
+Company mission: ${S.company.mission}
+You report to ${boss?boss.name+" ("+boss.title+")":"the owner"}. The owner is a human who makes final decisions and does anything that needs contacting people, paying, or signing up.
+
+Your instructions:
+${a.instructions}
+
+Team:
+${team}
+
+How you work:
+- You handle one task per heartbeat and produce a concrete deliverable the owner can use today.
+- You cannot browse the web, send messages or remember anything outside this task thread. Say so plainly where it matters, and mark facts that may be out of date (laws, visa rules, prices) as needing verification.
+- Read the whole thread. If the owner requested changes, address every point.
+- Propose follow-up tasks only when they clearly move the goal forward.`;
+  const chain = goalChain(t.goalId).map((g,i)=>`${"  ".repeat(i)}- ${g.title}${g.desc?": "+g.desc:""}`).join("\n") || "(no goal linked)";
+  const thread = t.comments.map(c=>`[${who(c.author)}] ${c.text}`).join("\n\n") || "(no comments yet)";
+  const user = `Task: ${t.title}\n\nDetails:\n${t.desc||"(none)"}\n\nGoal chain (why this matters):\n${chain}\n\nThread so far:\n${thread}`;
+  return {system,user};
+}
+async function callClaude(a,t){
+  const {system,user} = buildPrompt(a,t);
+  const body = {model:a.model, max_tokens:16000, system, messages:[{role:"user",content:user}],
+    output_config:{effort:S.settings.effort||"medium", format:{type:"json_schema",schema:SCHEMA}}};
+  const headers = {"content-type":"application/json","x-api-key":S.settings.apiKey,"anthropic-version":"2026-10-21","anthropic-dangerous-direct-browser-access":"true"};
+  if (a.model !== "claude-haiku-5-5") { body.fallbacks = "default"; headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; }
+  const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers,body:JSON.stringify(body)});
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j?.error?.message || `HTTP ${r.status}`);
+  const [pin,pout] = PRICES[j.model] || PRICES[a.model];
+  const cost = ((j.usage?.input_tokens||0)*pin + (j.usage?.output_tokens||0)*pout)/1e6;
+  if (j.stop_reason === "refusal") return {cost, result:null, note:"The model declined this request."};
+  if (j.stop_reason === "max_tokens") return {cost, result:null, note:"Response was cut off (max tokens)."};
+  const text = (j.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+  let result; try { result = JSON.parse(text); } catch { return {cost, result:null, note:"Could not parse the agent's reply:\n"+text.slice(0,2000)}; }
+  return {cost,result};
+}
+function resolveAssignee(name){
+  const n=(name||"").trim().toLowerCase();
+  if (!n || n==="owner" || n==="you") return HUMAN;
+  return (S.agents.find(a=>a.name.toLowerCase()===n || a.title.toLowerCase()===n) || S.agents.find(a=>n.includes(a.name.toLowerCase())))?.id || HUMAN;
+}
+async function runTask(a,t){
+  if (a.status!=="active") { log(`${a.name} is paused; skipped "${t.title}".`); return; }
+  if (a.spentUsd >= a.budgetUsd) { a.status="paused"; log(`${a.name} hit budget (${money(a.budgetUsd)}) and was paused.`); return; }
+  t.status="in_progress"; t.lockedBy=a.id; t.updated=Date.now(); log(`${a.name} checked out "${t.title}".`); render();
+  try {
+    const {cost,result,note} = await callClaude(a,t);
+    a.spentUsd += cost; t.costUsd += cost; a.lastRun = Date.now();
+    if (!result) { t.comments.push({author:a.id,text:note,ts:Date.now()}); t.status="blocked"; log(`${a.name} could not finish "${t.title}".`); }
+    else {
+      t.comments.push({author:a.id,ts:Date.now(),text:`${result.summary}\n\n${result.deliverable}${result.question_for_owner?`\n\nQuestion for you: ${result.question_for_owner}`:""}`});
+      t.status = result.outcome==="blocked" ? "blocked" : "review";
+      for (const s of (result.subtasks||[]).slice(0,3)) {
+        const payload = {title:s.title, description:s.description, assigneeId:resolveAssignee(s.assignee), goalId:t.goalId};
+        if (S.settings.requireApproval) S.approvals.push({id:uid(),payload,requestedBy:a.id,status:"pending",ts:Date.now()});
+        else S.tasks.push({id:uid(),title:payload.title,desc:payload.description,goalId:payload.goalId,assigneeId:payload.assigneeId,status:"todo",priority:2,comments:[],createdBy:a.id,costUsd:0,updated:Date.now()});
+      }
+      log(`${a.name} moved "${t.title}" to ${t.status} (${money(cost)}).${result.subtasks?.length?` Proposed ${result.subtasks.length} follow-up task(s).`:""}`);
+    }
+    if (a.budgetUsd && a.spentUsd >= a.budgetUsd) { a.status="paused"; log(`${a.name} reached 100% of budget and was paused.`); }
+    else if (a.budgetUsd && a.spentUsd >= a.budgetUsd*0.8) log(`Warning: ${a.name} has used ${Math.round(a.spentUsd/a.budgetUsd*100)}% of budget.`);
+  } catch(e) {
+    t.status="todo"; log(`${a.name} failed on "${t.title}": ${e.message}`);
+  } finally { delete t.lockedBy; t.updated=Date.now(); render(); }
+}
+let running=false;
+async function heartbeat(){
+  if (running) return;
+  if (!S.settings.apiKey) { alert("Add your Anthropic API key in Settings first."); S.ui.tab="settings"; render(); return; }
+  running=true; $("#hbStatus").textContent="Heartbeat running…";
+  log("Heartbeat started.");
+  const jobs = S.agents.filter(a=>a.status==="active").map(a=>{
+    const t = S.tasks.filter(t=>t.assigneeId===a.id && t.status==="todo" && !t.lockedBy).sort((x,y)=>x.priority-y.priority||x.updated-y.updated)[0];
+    return t ? runTask(a,t) : null;
+  }).filter(Boolean);
+  if (!jobs.length) log("Heartbeat: no agent had a To-do task.");
+  await Promise.allSettled(jobs);
+  running=false; $("#hbStatus").textContent="Last heartbeat "+new Date().toLocaleTimeString(); render();
+}
+let timer=null;
+function schedule(){ clearInterval(timer); const m=+S.settings.autoMin; if (m>0) timer=setInterval(heartbeat, m*60000); }
+
+/* ---------- events ---------- */
+document.addEventListener("click", async e=>{
+  const el=e.target.closest("[data-act]"); if(!el) return;
+  const act=el.dataset.act, id=el.dataset.id; e.preventDefault();
+  const v = s => $(s)?.value ?? "";
+  const tk = () => S.tasks.find(x=>x.id===id);
+  switch(act){
+    case "tab": S.ui.tab=id; render(); break;
+    case "heartbeat": heartbeat(); break;
+    case "open": openTask(id); break;
+    case "close": closeDlg(); break;
+    case "newTask": newTask(el.dataset.goal); break;
+    case "createTask": if(!v("#tTitle").trim()) return; S.tasks.push({id:uid(),title:v("#tTitle"),desc:v("#tDesc"),assigneeId:v("#tWho"),goalId:v("#tGoal")||null,priority:+v("#tPri"),status:"todo",comments:[],createdBy:HUMAN,costUsd:0,updated:Date.now()}); log(`You created "${v("#tTitle")}".`); closeDlg(); render(); break;
+    case "saveTask": { const t=tk(); Object.assign(t,{title:v("#tTitle"),desc:v("#tDesc"),assigneeId:v("#tWho"),status:v("#tStatus"),priority:+v("#tPri"),goalId:v("#tGoal")||null,updated:Date.now()}); if(v("#tComment").trim()) t.comments.push({author:HUMAN,text:v("#tComment"),ts:Date.now()}); closeDlg(); render(); break; }
+    case "accept": { const t=tk(); t.status="done"; t.updated=Date.now(); if(v("#tComment").trim()) t.comments.push({author:HUMAN,text:v("#tComment"),ts:Date.now()}); log(`You approved "${t.title}".`); closeDlg(); render(); break; }
+    case "changes": { const t=tk(); const c=v("#tComment").trim(); if(!c){ alert("Write what to change in the comment box first."); return; } t.comments.push({author:HUMAN,text:"Changes requested: "+c,ts:Date.now()}); t.status="todo"; t.updated=Date.now(); log(`You requested changes on "${t.title}".`); closeDlg(); render(); break; }
+    case "runOne": { const t=tk(); if(!S.settings.apiKey){ alert("Add your API key in Settings first."); return; } if(v("#tComment").trim()) t.comments.push({author:HUMAN,text:v("#tComment"),ts:Date.now()}); closeDlg(); await runTask(agentById(t.assigneeId),t); break; }
+    case "delTask": if(confirm("Delete this task?")){ S.tasks=S.tasks.filter(x=>x.id!==id); closeDlg(); render(); } break;
+    case "editAgent": editAgent(id); break;
+    case "saveAgent": { if(!v("#aName").trim()) return; const d={name:v("#aName"),title:v("#aTitle"),reportsTo:v("#aBoss")||null,instructions:v("#aIns"),model:v("#aModel"),budgetUsd:+v("#aBudget")||0};
+      if(id) Object.assign(agentById(id),d); else { S.agents.push({id:uid(),...d,spentUsd:0,status:"active",lastRun:null}); log(`You hired ${d.name} (${d.title}).`); } closeDlg(); render(); break; }
+    case "fireAgent": if(confirm("Remove this agent? Their tasks go back to you.")){ const a=agentById(id); S.agents.forEach(x=>{if(x.reportsTo===id) x.reportsTo=a.reportsTo;}); S.tasks.forEach(t=>{if(t.assigneeId===id) t.assigneeId=HUMAN;}); S.agents=S.agents.filter(x=>x.id!==id); log(`You removed ${a.name}.`); closeDlg(); render(); } break;
+    case "toggleAgent": { const a=agentById(id); a.status=a.status==="active"?"paused":"active"; log(`${a.name} ${a.status==="active"?"resumed":"paused"}.`); render(); break; }
+    case "editGoal": editGoal(id, el.dataset.parent); break;
+    case "saveGoal": { if(!v("#gTitle").trim()) return; const d={title:v("#gTitle"),desc:v("#gDesc"),parentId:v("#gParent")||null}; if(d.parentId===id) d.parentId=null; if(id) Object.assign(S.goals.find(g=>g.id===id),d); else S.goals.push({id:uid(),...d}); closeDlg(); render(); break; }
+    case "delGoal": if(confirm("Delete this goal? Sub-goals move up a level.")){ const g=S.goals.find(x=>x.id===id); S.goals.forEach(x=>{if(x.parentId===id) x.parentId=g.parentId;}); S.tasks.forEach(t=>{if(t.goalId===id) t.goalId=g.parentId;}); S.goals=S.goals.filter(x=>x.id!==id); closeDlg(); render(); } break;
+    case "approve": { const r=S.approvals.find(x=>x.id===id); r.status="approved"; const p=r.payload; S.tasks.push({id:uid(),title:p.title,desc:p.description,goalId:p.goalId,assigneeId:p.assigneeId,status:"todo",priority:2,comments:[],createdBy:r.requestedBy,costUsd:0,updated:Date.now()}); log(`You approved new task "${p.title}".`); render(); break; }
+    case "reject": { const r=S.approvals.find(x=>x.id===id); r.status="rejected"; log(`You rejected "${r.payload.title}".`); render(); break; }
+    case "saveSettings": S.company.name=v("#sName")||"Crewboard"; S.company.mission=v("#sMission"); Object.assign(S.settings,{apiKey:v("#sKey").trim(),effort:v("#sEffort"),autoMin:Math.max(0,+v("#sAuto")||0),requireApproval:$("#sAppr").checked}); schedule(); log("Settings saved."); render(); break;
+    case "export": { const copy={...S,settings:{...S.settings,apiKey:""}}; const b=new Blob([JSON.stringify(copy,null,2)],{type:"application/json"}); const u=URL.createObjectURL(b); const x=document.createElement("a"); x.href=u; x.download="crewboard.json"; x.click(); URL.revokeObjectURL(u); break; }
+    case "import": $("#importFile").click(); break;
+    case "resetSpend": S.agents.forEach(a=>{a.spentUsd=0; if(a.status==="paused") a.status="active";}); log("Spend reset for a new period; agents resumed."); render(); break;
+    case "reset": if(confirm("Wipe everything and start from the template?")){ S=seed(); render(); } break;
+  }
+});
+document.addEventListener("change", e=>{
+  if (e.target.id!=="importFile" || !e.target.files[0]) return;
+  e.target.files[0].text().then(txt=>{ try { const d=JSON.parse(txt); if(!d.agents||!d.tasks) throw 0; d.settings={...S.settings,...d.settings,apiKey:S.settings.apiKey}; S=d; log("Imported data."); render(); } catch { alert("That file isn't a Crewboard export."); } });
+});
+render(); schedule();
+</script>
+</body>
+</html>
